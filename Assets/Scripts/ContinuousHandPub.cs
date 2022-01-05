@@ -81,9 +81,6 @@ public class ContinuousHandPub : MonoBehaviour
     RobotState robot_state = RobotState.Sleeping;
     GripperState gripper_state = GripperState.Open;
     UserState user_state = UserState.Hold;
-
-    // Vector3 original_scale;
-    // Vector3 original_position;
     
     // time used to check if user is still holding together thumb and index
     float time_next_check = 0.0f;
@@ -125,11 +122,12 @@ public class ContinuousHandPub : MonoBehaviour
         user_state = UserState.Hold;
         
         InitWorkArea();
-        // in case something was still running:
+        // In case something was still running:
         StopContinuousHandFollow();
         GoSleep();
     }
 
+    // Safeguard to keep the physical robot arm from crashing.
     void OnApplicationQuit()
     {
         StopContinuousHandFollow();
@@ -137,8 +135,6 @@ public class ContinuousHandPub : MonoBehaviour
     }
 
     void InitWorkArea() {
-        // original_scale = m_WorkVolume.transform.localScale;
-        // original_position = m_WorkVolume.transform.localPosition;
         work_area_distance = m_WorkVolume.transform.localPosition.z;
         m_GhostWorkVolume.transform.position = m_WorkVolume.transform.position;
         m_GhostWorkVolume.transform.rotation = m_WorkVolume.transform.rotation;
@@ -171,27 +167,22 @@ public class ContinuousHandPub : MonoBehaviour
     // USER STATE SWITCHES
     private void SwitchToWaitForFollow() {
         StopContinuousHandFollow();
-        // m_WorkVolume.transform.localScale = original_scale / 2;
-        // original_position = m_WorkVolume.transform.localPosition;
-        // m_WorkVolume.transform.position = m_RobotEndEffector.transform.position;
         SwitchToReady();
         Update_Button_Content("IconClose", "Stop Following Hand");
         user_state = UserState.WaitForFollow;
     }
 
     private void SwitchToFollow() {
-        // make sure we are waiting to follow
+        // Make sure we are waiting to follow.
         if (user_state != UserState.WaitForFollow) {
             SwitchToWaitForFollow();
         }
         m_GhostWorkVolume.SetActive(false);
         StartContinuousHandFollow();
-        // m_WorkVolume.transform.localScale = original_scale;
-        // m_WorkVolume.transform.localPosition = original_position;
         user_state = UserState.Follow;
     }
 
-    // gets called internally and upon repositioning robbot
+    // Gets called internally and upon repositioning robot.
     public void SwitchToHold() {
         user_state = UserState.Hold;
         StopContinuousHandFollow();
@@ -272,14 +263,14 @@ public class ContinuousHandPub : MonoBehaviour
     }
 
     /// <summary>
-    ///     Helper function that calls the feedbackhandler to indicate that robot is not following
+    ///     Helper function that calls the feedback handler to indicate that robot is not following
     /// </summary>
     void IndicateNotFollowing() {
         m_FeedbackHandler.GetComponent<FeedbackHandler>().HandleUnityFeedback(3);
     }
 
     /// <summary>
-    ///     Helper function that calls the feedbackhandler to indicate that robot is not following
+    ///     Helper function that calls the feedback handler to indicate that robot is not following
     /// </summary>
     void IndicateSleeping() {
         m_FeedbackHandler.GetComponent<FeedbackHandler>().HandleUnityFeedback(4);
@@ -299,8 +290,8 @@ public class ContinuousHandPub : MonoBehaviour
 
 
     /// <summary>
-    ///     Get wrist pose and publish it for the robot to follow.
-    ///     Get index and thumb distance and issue a GripperPositionRequest if their closer than 
+    ///     Get hand input pose and publish it for the robot to follow.
+    ///     Get index and thumb tip distance and issue a GripperPositionRequest if their closer than 
     ///     a threshold to close the gripper or wider than a threshold to open it again.
     /// </summary>
     void Update()
@@ -309,24 +300,26 @@ public class ContinuousHandPub : MonoBehaviour
             return;
         }
 
-        float dist = 0.5f; // Defines the physical position of the gripper between wrist and thumb of the users hand
+        // Defines the physical position of the gripper between the thumb proximal and index knuckle joint. The higher the closer to the index knuckle.
+        float dist = 0.5f; 
 
-        // check if inside work volume - aka if we should do tracking:
-        // We need to see the wrist, thumb proximal and index knuckle to compute an intuitive gripper pose for the user
+        // Check if inside work volume - aka if we should do tracking:
+        // We need to see the wrist, thumb proximal and index knuckle to compute an intuitive gripper pose for the user.
         if( HandJointUtils.TryGetJointPose(TrackedHandJoint.Wrist, Handedness.Right, out wrist_pose) &&
             HandJointUtils.TryGetJointPose(TrackedHandJoint.IndexKnuckle, Handedness.Right, out index_pose) &&
             HandJointUtils.TryGetJointPose(TrackedHandJoint.ThumbProximalJoint, Handedness.Right, out thumb_pose)) 
         {
             // This should give you the position between the thumb proximal and the index knuckle for ALL hand sizes
-            Vector3 wristP = wrist_pose.Position + (index_pose.Position + thumb_pose.Position - 2 * wrist_pose.Position) * dist;
-            if (CheckInsideWorkVolume(wristP)) 
+            Vector3 input_pos = thumb_pose.Position + (index_pose.Position - thumb_pose.Position) * dist;
+
+            if (CheckInsideWorkVolume(input_pos)) 
             {               
                  // send arm request first since gripper request updates index and thumb pose
                 if (!arm_execution_lock) {
                     if (user_state == UserState.WaitForFollow) {
                         SwitchToFollow();
                     }
-                    SendArmRequest(wristP);
+                    SendArmRequest(input_pos);
                 }
                 
                 if (!gripper_execution_lock) {
@@ -336,7 +329,7 @@ public class ContinuousHandPub : MonoBehaviour
                 if (user_state == UserState.Follow){
                     SwitchToWaitForFollow();
                 }
-                IndicateWorkArea(wristP);
+                IndicateWorkArea(input_pos);
             }
         } else {
             // we didn't see hand
@@ -345,21 +338,23 @@ public class ContinuousHandPub : MonoBehaviour
         }   
     }
 
-    private void SendArmRequest(Vector3 wristP) { 
+    private void SendArmRequest(Vector3 input_pos) { 
         // We want the gripper to align with the thumb and index finger of the user, not the wrist plane
         // Quaternion of desired rotation in world coordinates:
+
+        // Rotate the pose to match the orientation of the index knuckle and thumb proximal
         Quaternion offsetRot = wrist_pose.Rotation * Quaternion.Euler(25,0,65); 
 
         // relative rotation from end effector to wrist in world frame
-        Quaternion wristR = Quaternion.Inverse(m_RobotEndEffector.transform.rotation) * offsetRot;
+        Quaternion input_rot = Quaternion.Inverse(m_RobotEndEffector.transform.rotation) * offsetRot;
 
-        QuaternionMsg ros_wristR = wristR.To<FLU>();
+        QuaternionMsg ros_input_rot = input_rot.To<FLU>();
 
         //geometry_msgs/Pose - requested end effector pose
-        PoseMsg ee_pose = new PoseMsg{orientation = ros_wristR};
+        PoseMsg ee_pose = new PoseMsg{orientation = ros_input_rot};
     
         // get the vector from robot end effector to wrist:
-        Vector3 bearing = (wristP - m_RobotEndEffector.transform.position);
+        Vector3 bearing = (input_pos - m_RobotEndEffector.transform.position);
         // project coordinate frame into the one !rotated with robot and wrist angle
         float bearing_x = Vector3.Dot(bearing, m_WorkVolume.transform.right.normalized);
         float bearing_y = Vector3.Dot(bearing, m_WorkVolume.transform.up.normalized);
@@ -409,10 +404,10 @@ public class ContinuousHandPub : MonoBehaviour
 
     // we already know the wrist position and that we're outside of work area if this gets called
     // show where the new work area would be
-    public void IndicateWorkArea(Vector3 wristP) 
+    public void IndicateWorkArea(Vector3 input_pos) 
     {       
         // get the vector from robot waist to wrist:
-        Vector3 bearing = (wristP - m_RobotBase.transform.position);
+        Vector3 bearing = (input_pos - m_RobotBase.transform.position);
 
         // project onto local coordinate frame
         float bearing_x = Vector3.Dot(bearing, m_RobotBase.transform.right.normalized);

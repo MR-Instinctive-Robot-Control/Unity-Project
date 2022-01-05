@@ -138,6 +138,10 @@ PlayerSettings:
   preloadedAssets:
   - {fileID: 0}
   - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   - {fileID: 6217286840367960090, guid: 57bb3aba9aee7e547bc970b77e5869ce, type: 2}
   - {fileID: -8020940688284498102, guid: f816febb28423af4ea3f861332044408, type: 2}
   metroInputSource: 0
@@ -679,7 +683,7 @@ PlayerSettings:
   cloudServicesEnabled:
     Analytics: 0
     Build: 0
-    Collab: 1
+    Collab: 0
     Game Performance: 0
     Purchasing: 0
     UDP: 0
