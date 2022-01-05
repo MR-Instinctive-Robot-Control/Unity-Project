@@ -7,9 +7,9 @@
     "com.unity.ide.rider": "2.0.7",
     "com.unity.ide.visualstudio": "2.0.11",
     "com.unity.ide.vscode": "1.2.4",
-    "com.unity.robotics.ros-tcp-connector": "file:C:/Users/Jonathan/unity_projects/ROS-TCP-Connector-main/ROS-TCP-Connector-main/com.unity.robotics.ros-tcp-connector",
-    "com.unity.robotics.urdf-importer": "file:C:/Users/Jonathan/unity_projects/URDF-Importer-main/URDF-Importer-main/com.unity.robotics.urdf-importer",
-    "com.unity.robotics.visualizations": "file:C:/Users/Jonathan/unity_projects/ROS-TCP-Connector-main/ROS-TCP-Connector-main/com.unity.robotics.visualizations",
+    "com.unity.robotics.ros-tcp-connector": "https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector",
+    "com.unity.robotics.urdf-importer": "https://github.com/Unity-Technologies/URDF-Importer.git?path=/com.unity.robotics.urdf-importer#v0.5.0",
+    "com.unity.robotics.visualizations": "https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.visualizations",
     "com.unity.test-framework": "1.1.29",
     "com.unity.textmeshpro": "3.0.6",
     "com.unity.timeline": "1.4.8",
@@ -45,6 +45,8 @@
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
-    "com.unity.modules.xr": "1.0.0"
+    "com.unity.modules.xr": "1.0.0",
+    "com.microsoft.mixedreality.toolkit.examples": "file:MixedReality/com.microsoft.mixedreality.toolkit.examples-2.7.2.tgz",
+    "com.microsoft.mixedreality.toolkit.extensions": "file:MixedReality/com.microsoft.mixedreality.toolkit.extensions-2.7.2.tgz"
   }
 }

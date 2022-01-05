@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
@@ -15,7 +15,7 @@ public class PositionSubscriber : MonoBehaviour
     //    { "upper_arm_link" }; //, "/shoulder_link", "/upper_arm_link", "/upper_forearm_link", "lower_forearm_link", "/wrist_link"
 
     // Articulation Bodies
-    ArticulationBody[] m_JointArticulationBodies;
+    //ArticulationBody[] m_JointArticulationBodies;
     GameObject[] m_Links;
 
     [SerializeField]
@@ -48,17 +48,22 @@ public class PositionSubscriber : MonoBehaviour
     // ROS Connector
     ROSConnection m_Ros;
 
+    IDictionary<string, ArticulationBody> m_JointArticulationBodies;
+
+    // float[] previous_error = new float[] { 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
     void Start()
     {
-        m_Links = new GameObject[]{m_UpperForearm, m_LowerForearm, m_GripperProp,
-                m_LeftFinger, m_RightFinger, m_UpperArm, m_Shoulder, m_WristLink,
-                m_GripperLink};
-        m_JointArticulationBodies = new ArticulationBody[k_NumRobotJoints];
-
-        for (var i = 0; i < m_Links.Length; i++)
-        {
-            m_JointArticulationBodies[i] = m_Links[i].GetComponent<ArticulationBody>();
-        }
+        m_JointArticulationBodies = new Dictionary<string, ArticulationBody>();
+        m_JointArticulationBodies.Add("waist", m_Shoulder.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("shoulder", m_UpperArm.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("elbow", m_UpperForearm.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("forearm_roll", m_LowerForearm.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("wrist_angle", m_WristLink.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("wrist_rotate", m_GripperLink.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("gripper", m_GripperProp.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("left_finger", m_LeftFinger.GetComponent<ArticulationBody>());
+        m_JointArticulationBodies.Add("right_finger", m_RightFinger.GetComponent<ArticulationBody>());
 
         m_Ros = ROSConnection.GetOrCreateInstance();
         m_Ros.Subscribe<JointStateMsg>("/wx250s/joint_states", PositionCallback);
@@ -68,11 +73,40 @@ public class PositionSubscriber : MonoBehaviour
     void PositionCallback(JointStateMsg msg)
     {   
         // Set the joint values for every joint
-        for (var joint = 0; joint < m_JointArticulationBodies.Length; joint++)
+        // var virtual_ArticulationBodies = m_JointArticulationBodies;
+        // bool execute = true;
+        for (var joint = 0; joint < msg.name.Length; joint++)
         {
-            var joint1XDrive = m_JointArticulationBodies[joint].xDrive;
-            joint1XDrive.target = (float)msg.position[joint] * Mathf.Rad2Deg;
-            m_JointArticulationBodies[joint].xDrive = joint1XDrive;   
+            string jointName = msg.name[joint];
+            var joint1XDrive = m_JointArticulationBodies[jointName].xDrive;
+            if (jointName.Contains("finger")) {
+                joint1XDrive.target = (float)msg.position[joint];
+                m_JointArticulationBodies[jointName].xDrive = joint1XDrive;
+            } else {
+                 joint1XDrive.target = (float)msg.position[joint] * Mathf.Rad2Deg;
+                m_JointArticulationBodies[jointName].xDrive = joint1XDrive;
+            }
+           
+
+            /*______ TRIED TO FILTER BUT IT SUCKED : ____*/
+            // string jointName = msg.name[joint];
+            // var joint1XDrive = virtual_ArticulationBodies[jointName].xDrive;
+            // float previous_target = joint1XDrive.target;
+            // float this_target =  (float)msg.position[joint] * Mathf.Rad2Deg;
+            // float error = this_target - previous_target;
+            // // limit the error to vary by maximum 0.1 between updates
+            // if (Math.Abs(error - previous_error[joint]) < 0.14f) {
+            //     joint1XDrive.target = this_target;
+            //     virtual_ArticulationBodies[jointName].xDrive = joint1XDrive;
+            //     previous_error[joint] = error; 
+            // } else {
+            //     previous_error[joint] += 0.1f * (error-previous_error[joint]);
+            //     execute = false;
+            // }
+            
         }
+        // if (execute) {
+        //     m_JointArticulationBodies = virtual_ArticulationBodies;
+        // }
     }
 }

@@ -30,17 +30,15 @@ public class HandPublisher : MonoBehaviour
     GameObject m_RobotBase;
     public GameObject RobotBase { get => m_RobotBase; set => m_RobotBase = value; }
 
-    // Assures that the gripper is always positioned above the m_Target cube before grasping.
-    // readonly Quaternion m_PickOrientation = Quaternion.Euler(90, 90, 0);
-    // readonly Vector3 m_PickPoseOffset = Vector3.up * 0.1f;
-
     // Articulation Bodies
     ArticulationBody[] m_JointArticulationBodies;
-    //ArticulationBody m_LeftGripper;
-    //ArticulationBody m_RightGripper;
 
     // ROS Connector
     ROSConnection m_Ros;
+
+    // Lock to keep the publisher from sending until successfully executed
+    bool execution_lock = false;
+    bool start_following = false;
 
     /// <summary>
     ///     Find all robot joints in Awake() and add them to the jointArticulationBodies array.
@@ -53,25 +51,36 @@ public class HandPublisher : MonoBehaviour
         m_Ros = ROSConnection.GetOrCreateInstance();
         m_Ros.RegisterRosService<MoveItPlanRequest, MoveItPlanResponse>(m_RosServiceName);
         m_Ros.RegisterPublisher<PoseMsg>(m_TopicName);
+        execution_lock = false;
+        start_following = false; 
+    }
+    /// <summary>
+    /// Called when we toggle the robot follow mode.
+    /// </summary>
+    public void SwitchOnOff() 
+    {
+        start_following = !start_following;
     }
 
     /// <summary>
-    ///     Create a new MoverServiceRequest with the current values of the robot's joint angles,
-    ///     the target cube's current position and rotation, and the targetPlacement position and rotation.
-    ///     Call the MoverService using the ROSConnection and if a trajectory is successfully planned,
-    ///     execute the trajectories in a coroutine.
+    ///     Create a new MoveItServiceRequest to achieve the current pose of the operator's wrist.
     /// </summary>
-    public void PlanAndExecuteTargetPose()
+    public void Update()
     {
+        if (execution_lock || !start_following) {
+            return;
+        }
+
         var request = new MoveItPlanRequest();
 
-        // plan pose = 
+        // We want to plan for a pose
         request.cmd = MoveItPlanRequest.CMD_PLAN_POSE;
 
         // At the moment we don't save the hand positions but query them at the button press.
         Vector3 wristP = Vector3.zero;
         Quaternion wristR = Quaternion.identity;
 
+        // We try to get the current wrist position as the input of our PosePlanner
         if (HandJointUtils.TryGetJointPose(TrackedHandJoint.Wrist, Handedness.Right, out pose))
         {
             wristP = pose.Position;
@@ -80,23 +89,55 @@ public class HandPublisher : MonoBehaviour
              //geometry_msgs/Pose - requested end effector pose
             request.ee_pose = new PoseMsg
             {
+                // We have to get the pose in relation with the RobotBase and transform it to the right coordinates.
                 position = (pose.Position - m_RobotBase.transform.position).To<FLU>(),
-
                 orientation = (pose.Rotation).To<FLU>()
-                // orientation =  Quaternion.Euler(0, 0, 0).To<FLU>()
             };
 
             m_Ros.Publish(m_TopicName, request.ee_pose);
             m_Ros.SendServiceMessage<MoveItPlanResponse>(m_RosServiceName, request, ExecuteTargetPose);
+            // We are currently executing a trajectory and can't plan a new one
+            execution_lock = true;
         }
+
+        // We want to close the gripper when we tap our thumb and index finger and open it again if we release them.
+        if (HandJointUtils.TryGetJointPose(TrackedHandJoint.Wrist, Handedness.Right, out pose))
+        {
+            wristP = pose.Position;
+            wristR = pose.Rotation;
+
+             //geometry_msgs/Pose - requested end effector pose
+            request.ee_pose = new PoseMsg
+            {
+                // We have to get the pose in relation with the RobotBase and transform it to the right coordinates.
+                position = (pose.Position - m_RobotBase.transform.position).To<FLU>(),
+                orientation = (pose.Rotation).To<FLU>()
+            };
+
+            m_Ros.Publish(m_TopicName, request.ee_pose);
+            m_Ros.SendServiceMessage<MoveItPlanResponse>(m_RosServiceName, request, ExecuteTargetPose);
+            // We are currently executing a trajectory and can't plan a new one
+            execution_lock = true;
+        }
+
     }
 
-    public void ExecuteTargetPose(MoveItPlanResponse response)
+    private void ExecuteTargetPose(MoveItPlanResponse response)
     {
         if (response.success) {
             var request = new MoveItPlanRequest();
+            // Now we want to execute the trajectory
             request.cmd = MoveItPlanRequest.CMD_EXECUTE;
-            m_Ros.SendServiceMessage<MoveItPlanResponse>(m_RosServiceName, request);
+            m_Ros.SendServiceMessage<MoveItPlanResponse>(m_RosServiceName, request, UnlockRobotArm);
+        } else {
+            execution_lock = false;
         }
+    }
+    /// <summary>
+    /// Lock on which we block when we are currently executing a trajectory.
+    /// </summary>
+    private void UnlockRobotArm(MoveItPlanResponse response)
+    {
+        execution_lock = false;
     }
 }
